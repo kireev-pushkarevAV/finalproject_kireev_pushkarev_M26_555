@@ -69,16 +69,15 @@ uv run ruff check .
 
 ## Доступные команды CLI
 
-- update-rates [--source <coingecko|exchangerate>] — обновление котировок из внешних API в локальный кэш и журнал.
-- show-rates [--currency <CODE>] [--top <N>] [--base <CODE>] — просмотр актуальных курсов из кэша с фильтрацией.
-- register --username <str> --password <str> — регистрация нового аккаунта (пароль от 4 символов).
-- login --username <str> --password <str> — авторизация текущей сессии.
-- buy --currency <CODE> --amount <float> — покупка указанного объема актива по курсу к USD.
-- sell --currency <CODE> --amount <float> — продажа указанного объема актива.
-- show-portfolio [--base <CODE>] — вывод сводной таблицы активов и балансов пользователя.
-- get-rate --from <CODE> --to <CODE> — получение прямого и обратного курса между двумя валютами.
-- exit — завершение сеанса.
-
+* `update-rates [--source <coingecko|exchangerate>]` — обновление котировок из внешних API в локальный кэш и журнал.
+* `show-rates [--currency <CODE>] [--top <N>] [--base <CODE>]` — просмотр актуальных курсов из кэша с фильтрацией.
+* `register --username <str> --password <str>` — регистрация нового аккаунта (пароль от 4 символов).
+* `login --username <str> --password <str>` — авторизация текущей сессии.
+* `buy --currency <CODE> --amount <float>` — покупка указанного объема актива по курсу к USD.
+* `sell --currency <CODE> --amount <float>` — продажа указанного объема актива.
+* `show-portfolio [--base <CODE>]` — вывод сводной таблицы активов и балансов пользователя.
+* `get-rate --from <CODE> --to <CODE>` — получение прямого и обратного курса между двумя валютами.
+* `exit` — завершение сеанса.
 
 ## Демонстрация работы
 
