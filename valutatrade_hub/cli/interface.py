@@ -9,7 +9,10 @@ from valutatrade_hub.core.exceptions import (
     CurrencyNotFoundError,
     InsufficientFundsError,
 )
-from valutatrade_hub.parser_service.updater import update_exchange_rates
+from valutatrade_hub.infra.database import DatabaseManager
+from valutatrade_hub.parser_service.updater import RatesUpdater
+
+db = DatabaseManager()
 
 
 def parse_line(line: str) -> list[str]:
@@ -197,14 +200,76 @@ def handle_get_rate(args: list[str]) -> None:
 
 
 def handle_update_rates(args: list[str]) -> None:
+    parser = argparse.ArgumentParser(prog="update-rates", add_help=False)
+    parser.add_argument("--source", default=None)
+
     try:
-        res = update_exchange_rates()
-        print(
-            f"Курсы успешно обновлены. Загружено валютных пар: {res['count']}. "
-            f"Метка времени: {res['updated_at'].replace('T', ' ')}"
-        )
+        parsed = parser.parse_args(args)
+        updater = RatesUpdater()
+        res = updater.run_update(source=parsed.source)
+
+        if res["errors_count"] > 0:
+            print("Update completed with errors. Check logs/actions.log for details.")
+        else:
+            print(
+                f"Update successful. Total rates updated: {res['rates_count']}. "
+                f"Last refresh: {res['last_refresh']}"
+            )
     except Exception as e:
         print(f"Ошибка обновления курсов: {e}")
+
+
+def handle_show_rates(args: list[str]) -> None:
+    parser = argparse.ArgumentParser(prog="show-rates", add_help=False)
+    parser.add_argument("--currency", default=None)
+    parser.add_argument("--top", type=int, default=None)
+    parser.add_argument("--base", default="USD")
+
+    try:
+        parsed = parser.parse_args(args)
+        rates_data = db.read("RATES_FILE")
+        pairs = rates_data.get("pairs", {}) if isinstance(rates_data, dict) else {}
+
+        if not pairs:
+            print(
+                "Локальный кеш курсов пуст. Выполните 'update-rates', "
+                "чтобы загрузить данные."
+            )
+            return
+
+        last_refresh = rates_data.get("last_refresh", "N/A")
+        print(f"Rates from cache (updated at {last_refresh}):")
+
+        if parsed.currency:
+            curr = parsed.currency.upper()
+            found = False
+            for pair, info in pairs.items():
+                if pair.startswith(f"{curr}_") or pair.endswith(f"_{curr}"):
+                    print(f"- {pair}: {info['rate']}")
+                    found = True
+            if not found:
+                print(f"Курс для '{curr}' не найден в кеше.")
+            return
+
+        if parsed.top:
+            crypto_pairs = [
+                (pair, info)
+                for pair, info in pairs.items()
+                if info.get("source") == "CoinGecko"
+            ]
+            sorted_crypto = sorted(
+                crypto_pairs, key=lambda x: x[1]["rate"], reverse=True
+            )[: parsed.top]
+            for pair, info in sorted_crypto:
+                print(f"- {pair}: {info['rate']}")
+            return
+
+        for pair, info in sorted(pairs.items()):
+            print(f"- {pair}: {info['rate']}")
+    except (argparse.ArgumentError, SystemExit):
+        print("Ошибка параметров команды show-rates")
+    except Exception as e:
+        print(f"Ошибка: {e}")
 
 
 def run_cli() -> None:
@@ -217,6 +282,7 @@ def run_cli() -> None:
         "sell": handle_sell,
         "get-rate": handle_get_rate,
         "update-rates": handle_update_rates,
+        "show-rates": handle_show_rates,
     }
 
     while True:
