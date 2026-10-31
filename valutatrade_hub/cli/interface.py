@@ -2,7 +2,13 @@ import argparse
 import shlex
 import sys
 
+from prettytable import PrettyTable
+
 from valutatrade_hub.core import usecases
+from valutatrade_hub.core.exceptions import (
+    CurrencyNotFoundError,
+    InsufficientFundsError,
+)
 
 
 def parse_line(line: str) -> list[str]:
@@ -35,8 +41,8 @@ def handle_login(args: list[str]) -> None:
 
     try:
         parsed = parser.parse_args(args)
-        user = usecases.login_user(parsed.username, parsed.password)
-        print(f"Вы вошли как '{user.username}'")
+        res = usecases.login_user(parsed.username, parsed.password)
+        print(f"Вы вошли как '{res['username']}'")
     except (argparse.ArgumentError, SystemExit):
         print("Ошибка: укажите --username <str> и --password <str>")
     except ValueError as e:
@@ -62,21 +68,39 @@ def handle_show_portfolio(args: list[str]) -> None:
             print(f"Портфель пользователя '{user.username}' пуст.")
             return
 
-        print(f"Портфель пользователя '{user.username}' (база: {base}):")
-        total_val = 0.0
+        table = PrettyTable()
+        table.field_names = [
+            "Валюта",
+            "Баланс",
+            f"Курс к {base}",
+            f"Стоимость ({base})",
+        ]
+        table.align["Валюта"] = "l"
+        table.align["Баланс"] = "r"
+        table.align[f"Курс к {base}"] = "r"
+        table.align[f"Стоимость ({base})"] = "r"
 
+        total_val = 0.0
         for code, wallet in wallets.items():
             rate, _ = usecases.get_exchange_rate(code, base)
             val_in_base = wallet.balance * rate
             total_val += val_in_base
-            print(f"{code}: {wallet.balance:.4f}  → {val_in_base:.2f} {base}")
+            table.add_row(
+                [
+                    code,
+                    f"{wallet.balance:.4f}",
+                    f"{rate:.4f}",
+                    f"{val_in_base:.2f}",
+                ]
+            )
 
-        print("---------------------------------")
-        print(f"ИТОГО: {total_val:,.2f} {base}".replace(",", " "))
+        print(f"\nПортфель пользователя '{user.username}':")
+        print(table)
+        print(f"ИТОГО: {total_val:,.2f} {base}\n".replace(",", " "))
     except (argparse.ArgumentError, SystemExit):
         print("Ошибка параметров команды show-portfolio")
-    except ValueError:
-        print(f"Неизвестная базовая валюта '{parsed.base}'")
+    except (CurrencyNotFoundError, ValueError) as e:
+        print(e)
 
 
 def handle_buy(args: list[str]) -> None:
@@ -103,7 +127,7 @@ def handle_buy(args: list[str]) -> None:
         )
     except (argparse.ArgumentError, SystemExit):
         print("Ошибка: используйте buy --currency <str> --amount <float>")
-    except (PermissionError, ValueError) as e:
+    except (PermissionError, ValueError, CurrencyNotFoundError) as e:
         print(e)
 
 
@@ -131,7 +155,12 @@ def handle_sell(args: list[str]) -> None:
         )
     except (argparse.ArgumentError, SystemExit):
         print("Ошибка: используйте sell --currency <str> --amount <float>")
-    except (PermissionError, ValueError) as e:
+    except (
+        PermissionError,
+        ValueError,
+        CurrencyNotFoundError,
+        InsufficientFundsError,
+    ) as e:
         print(e)
 
 
@@ -162,7 +191,7 @@ def handle_get_rate(args: list[str]) -> None:
         )
     except (argparse.ArgumentError, SystemExit):
         print("Ошибка: используйте get-rate --from <str> --to <str>")
-    except ValueError as e:
+    except (CurrencyNotFoundError, ValueError) as e:
         print(e)
 
 

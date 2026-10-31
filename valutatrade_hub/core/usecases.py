@@ -1,16 +1,16 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from valutatrade_hub.core.models import Portfolio, User, Wallet
-from valutatrade_hub.core.utils import (
-    PORTFOLIOS_FILE,
-    RATES_FILE,
-    USERS_FILE,
-    generate_salt,
-    read_json,
-    write_json,
+from valutatrade_hub.core.currencies import get_currency
+from valutatrade_hub.core.exceptions import (
+    InsufficientFundsError,
 )
+from valutatrade_hub.core.models import Portfolio, User, Wallet
+from valutatrade_hub.core.utils import generate_salt
+from valutatrade_hub.decorators import log_action
+from valutatrade_hub.infra.database import DatabaseManager
 
+db = DatabaseManager()
 _CURRENT_USER: User | None = None
 
 
@@ -24,13 +24,16 @@ def set_current_user(user: User | None) -> None:
 
 
 def load_rates() -> dict[str, Any]:
-    data = read_json(RATES_FILE)
+    data = db.read("RATES_FILE")
     return data.get("pairs", {}) if isinstance(data, dict) else {}
 
 
 def get_exchange_rate(from_curr: str, to_curr: str) -> tuple[float, str]:
     from_c = from_curr.upper()
     to_c = to_curr.upper()
+
+    get_currency(from_c)
+    get_currency(to_c)
 
     if from_c == to_c:
         return 1.0, datetime.now(UTC).isoformat()
@@ -57,6 +60,7 @@ def get_exchange_rate(from_curr: str, to_curr: str) -> tuple[float, str]:
     raise ValueError(f"Курс {from_c}→{to_c} недоступен. Повторите попытку позже.")
 
 
+@log_action("REGISTER")
 def register_user(username: str, password: str) -> dict[str, Any]:
     if not username or not username.strip():
         raise ValueError("Имя пользователя не может быть пустым.")
@@ -64,7 +68,7 @@ def register_user(username: str, password: str) -> dict[str, Any]:
         raise ValueError("Пароль должен быть не короче 4 символов.")
 
     clean_name = username.strip()
-    users_data = read_json(USERS_FILE)
+    users_data = db.read("USERS_FILE")
 
     for entry in users_data:
         if entry["username"].lower() == clean_name.lower():
@@ -83,17 +87,18 @@ def register_user(username: str, password: str) -> dict[str, Any]:
     )
 
     users_data.append(user.to_dict())
-    write_json(USERS_FILE, users_data)
+    db.write("USERS_FILE", users_data)
 
-    portfolios_data = read_json(PORTFOLIOS_FILE)
+    portfolios_data = db.read("PORTFOLIOS_FILE")
     portfolios_data.append({"user_id": new_id, "wallets": {}})
-    write_json(PORTFOLIOS_FILE, portfolios_data)
+    db.write("PORTFOLIOS_FILE", portfolios_data)
 
     return {"user_id": new_id, "username": clean_name}
 
 
-def login_user(username: str, password: str) -> User:
-    users_data = read_json(USERS_FILE)
+@log_action("LOGIN")
+def login_user(username: str, password: str) -> dict[str, Any]:
+    users_data = db.read("USERS_FILE")
     clean_name = username.strip()
 
     user_dict = next(
@@ -115,11 +120,11 @@ def login_user(username: str, password: str) -> User:
         raise ValueError("Неверный пароль")
 
     set_current_user(user)
-    return user
+    return {"user_id": user.user_id, "username": user.username}
 
 
 def load_user_portfolio(user_id: int) -> Portfolio:
-    portfolios_data = read_json(PORTFOLIOS_FILE)
+    portfolios_data = db.read("PORTFOLIOS_FILE")
     port_dict = next((p for p in portfolios_data if p["user_id"] == user_id), None)
 
     if not port_dict:
@@ -133,7 +138,7 @@ def load_user_portfolio(user_id: int) -> Portfolio:
 
 
 def save_user_portfolio(portfolio: Portfolio) -> None:
-    portfolios_data = read_json(PORTFOLIOS_FILE)
+    portfolios_data = db.read("PORTFOLIOS_FILE")
     updated = False
     for i, p in enumerate(portfolios_data):
         if p["user_id"] == portfolio.user_id:
@@ -142,17 +147,18 @@ def save_user_portfolio(portfolio: Portfolio) -> None:
             break
     if not updated:
         portfolios_data.append(portfolio.to_dict())
-    write_json(PORTFOLIOS_FILE, portfolios_data)
+    db.write("PORTFOLIOS_FILE", portfolios_data)
 
 
+@log_action("BUY", verbose=True)
 def execute_buy(currency: str, amount: float) -> dict[str, Any]:
     user = get_current_user()
     if not user:
         raise PermissionError("Сначала выполните login")
 
     curr = currency.strip().upper()
-    if not curr:
-        raise ValueError("Код валюты не может быть пустым.")
+    get_currency(curr)
+
     if amount <= 0:
         raise ValueError("'amount' должен быть положительным числом")
 
@@ -170,6 +176,7 @@ def execute_buy(currency: str, amount: float) -> dict[str, Any]:
     save_user_portfolio(portfolio)
 
     return {
+        "user": user.username,
         "currency": curr,
         "amount": amount,
         "rate": rate_to_usd,
@@ -179,14 +186,15 @@ def execute_buy(currency: str, amount: float) -> dict[str, Any]:
     }
 
 
+@log_action("SELL", verbose=True)
 def execute_sell(currency: str, amount: float) -> dict[str, Any]:
     user = get_current_user()
     if not user:
         raise PermissionError("Сначала выполните login")
 
     curr = currency.strip().upper()
-    if not curr:
-        raise ValueError("Код валюты не может быть пустым.")
+    get_currency(curr)
+
     if amount <= 0:
         raise ValueError("'amount' должен быть положительным числом")
 
@@ -199,6 +207,9 @@ def execute_sell(currency: str, amount: float) -> dict[str, Any]:
             "она создаётся автоматически при первой покупке."
         )
 
+    if amount > wallet.balance:
+        raise InsufficientFundsError(wallet.balance, amount, curr)
+
     before_balance = wallet.balance
     wallet.withdraw(amount)
 
@@ -208,6 +219,7 @@ def execute_sell(currency: str, amount: float) -> dict[str, Any]:
     save_user_portfolio(portfolio)
 
     return {
+        "user": user.username,
         "currency": curr,
         "amount": amount,
         "rate": rate_to_usd,
