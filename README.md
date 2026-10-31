@@ -78,6 +78,7 @@ uv run ruff check .
 - get-rate --from <CODE> --to <CODE> — получение прямого и обратного курса между двумя валютами.
 - exit — завершение сеанса.
 
+
 ## Демонстрация работы
 
-Запись полного жизненного цикла приложения и обработки ошибок доступна в репозитории в файле `demo.cast`.
+[![asciicast](https://asciinema.org/a/g85lxepuCA1LSi9L.svg)](https://asciinema.org/a/g85lxepuCA1LSi9L)
