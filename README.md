@@ -81,4 +81,9 @@ uv run ruff check .
 
 ## Демонстрация работы
 
-[![asciicast](https://asciinema.org/a/g85lxepuCA1LSi9L.svg)](https://asciinema.org/a/g85lxepuCA1LSi9L)
+> **Интерактивная запись консоли (веб-плеер):**  
+> 🔗 [Посмотреть сценарий работы и обработку ошибок на asciinema.org](https://asciinema.org/a/g85lxepuCA1LSi9L)
+
+Локальная запись сессии в формате asciinema v2 также доступна в репозитории: [`demo.cast`](demo.cast). Для воспроизведения в терминале:
+```bash
+asciinema play demo.cast
