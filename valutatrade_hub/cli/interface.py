@@ -9,6 +9,7 @@ from valutatrade_hub.core.exceptions import (
     CurrencyNotFoundError,
     InsufficientFundsError,
 )
+from valutatrade_hub.parser_service.updater import update_exchange_rates
 
 
 def parse_line(line: str) -> list[str]:
@@ -195,6 +196,17 @@ def handle_get_rate(args: list[str]) -> None:
         print(e)
 
 
+def handle_update_rates(args: list[str]) -> None:
+    try:
+        res = update_exchange_rates()
+        print(
+            f"Курсы успешно обновлены. Загружено валютных пар: {res['count']}. "
+            f"Метка времени: {res['updated_at'].replace('T', ' ')}"
+        )
+    except Exception as e:
+        print(f"Ошибка обновления курсов: {e}")
+
+
 def run_cli() -> None:
     print("ValutaTrade Hub CLI запущен. Введите команду (или 'exit' для выхода):")
     commands = {
@@ -204,6 +216,7 @@ def run_cli() -> None:
         "buy": handle_buy,
         "sell": handle_sell,
         "get-rate": handle_get_rate,
+        "update-rates": handle_update_rates,
     }
 
     while True:
