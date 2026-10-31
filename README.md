@@ -41,8 +41,8 @@ finalproject_kireev_pushkarev_M26_555/
 │   └── logging_config.py
 ├── main.py
 ├── pyproject.toml
-└── uv.lock
-
+└── uv.lock 
+```
 ## Установка и запуск
 
 Проект управляется через пакетный менеджер uv.
