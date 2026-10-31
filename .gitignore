@@ -17,3 +17,7 @@ logs/
 *.log
 
 data/*.tmp
+
+data/*.json
+data/*.tmp
+logs/*.log
